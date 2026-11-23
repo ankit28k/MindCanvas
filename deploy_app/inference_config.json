@@ -1,0 +1,62 @@
+{
+    "rank_1": {
+        "model_name": "Transformer",
+        "checkpoint_file": "rank1_Transformer_best.pt",
+        "block_size": 20,
+        "clip_dim": 768,
+        "grand_avg_top1": "14.50%",
+        "grand_avg_top10": "53.00%",
+        "per_subject_top10": {
+            "sub-01": "46.00%",
+            "sub-02": "41.00%"
+        }
+    },
+    "rank_2": {
+        "model_name": "GRU",
+        "checkpoint_file": "rank2_GRU_best.pt",
+        "block_size": 25,
+        "clip_dim": 768,
+        "grand_avg_top1": "14.00%",
+        "grand_avg_top10": "52.00%",
+        "per_subject_top10": {
+            "sub-01": "45.50%",
+            "sub-02": "40.00%"
+        }
+    },
+    "rank_3": {
+        "model_name": "BiGRU",
+        "checkpoint_file": "rank3_BiGRU_best.pt",
+        "block_size": 25,
+        "clip_dim": 768,
+        "grand_avg_top1": "12.50%",
+        "grand_avg_top10": "51.00%",
+        "per_subject_top10": {
+            "sub-01": "45.50%",
+            "sub-02": "43.00%"
+        }
+    },
+    "rank_4": {
+        "model_name": "BiLSTM",
+        "checkpoint_file": "rank4_BiLSTM_best.pt",
+        "block_size": 25,
+        "clip_dim": 768,
+        "grand_avg_top1": "10.50%",
+        "grand_avg_top10": "47.00%",
+        "per_subject_top10": {
+            "sub-01": "43.50%",
+            "sub-02": "37.00%"
+        }
+    },
+    "rank_5": {
+        "model_name": "LSTM",
+        "checkpoint_file": "rank5_LSTM_best.pt",
+        "block_size": 25,
+        "clip_dim": 768,
+        "grand_avg_top1": "11.50%",
+        "grand_avg_top10": "45.00%",
+        "per_subject_top10": {
+            "sub-01": "41.00%",
+            "sub-02": "39.00%"
+        }
+    }
+}

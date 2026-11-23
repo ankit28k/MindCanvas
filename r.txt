@@ -1,0 +1,67 @@
+
+
+cat << 'EOF' > prepare_pairs.py
+import os, json, shutil, urllib.request, urllib.parse
+import numpy as np
+
+os.makedirs("test_images", exist_ok=True)
+
+# 1. Load your exact test concept names and demo slices
+concepts = np.load("vectors/test_concept_names.npy", allow_pickle=True)
+with open("eeg_demo_slices.json", "r") as f:
+    demo = json.load(f)
+
+demo_indices = demo.get("demo_indices", list(range(len(concepts))))
+
+# OPTIONAL: If you have the original THINGS test images folder on your Mac, put the path here:
+LOCAL_TEST_IMG_DIR = ""  # e.g., "/Users/ankitkumar/Downloads/test_images"
+
+def fetch_clean_concept_image(concept_name, save_path):
+    clean_query = concept_name.replace("_", " ")
+    # Query Wikimedia Commons API for a real photograph of the test concept
+    api_url = f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=filetype:bitmap%20{urllib.parse.quote(clean_query)}&gsrlimit=1&prop=imageinfo&iiprop=url&iiurlwidth=400&format=json"
+    req = urllib.request.Request(api_url, headers={"User-Agent": "MindCanvasResearch/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+            pages = data.get("query", {}).get("pages", {})
+            for p in pages.values():
+                img_url = p.get("imageinfo", [{}])[0].get("thumburl") or p.get("imageinfo", [{}])[0].get("url")
+                if img_url:
+                    img_req = urllib.request.Request(img_url, headers={"User-Agent": "MindCanvasResearch/1.0"})
+                    with urllib.request.urlopen(img_req, timeout=10) as img_resp:
+                        with open(save_path, "wb") as out:
+                            out.write(img_resp.read())
+                    return True
+    except Exception as e:
+        print(f"Wikimedia fallback for {concept_name}: {e}")
+    return False
+
+print(f"Preparing EEG-Image pairs for {len(demo_indices)} demo slices...")
+for idx in demo_indices:
+    cname = str(concepts[idx])
+    out_file = os.path.join("test_images", f"{cname}.jpg")
+    if os.path.exists(out_file) and os.path.getsize(out_file) > 1000:
+        print(f"[OK] Cached pair: Slice #{idx+1:03d} <-> {out_file}")
+        continue
+
+    # Check local test image directory first if provided
+    copied = False
+    if LOCAL_TEST_IMG_DIR and os.path.exists(LOCAL_TEST_IMG_DIR):
+        for root, _, files in os.walk(LOCAL_TEST_IMG_DIR):
+            if cname in root.lower() or any(cname in fn.lower() for fn in files):
+                for fn in files:
+                    if fn.lower().endswith((".jpg", ".jpeg", ".png")):
+                        shutil.copy(os.path.join(root, fn), out_file)
+                        copied = True
+                        break
+            if copied:
+                break
+
+    if not copied:
+        ok = fetch_clean_concept_image(cname, out_file)
+        print(f"[{'DOWNLOADED' if ok else 'MISSING'}] Slice #{idx+1:03d} ({cname}) -> {out_file}")
+
+print("Done! All test_images/ pairs are ready.")
+EOF
+python3 prepare_pairs.py

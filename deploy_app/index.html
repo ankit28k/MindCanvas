@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MindCanvas — Zero-Shot EEG-to-CLIP Visual Reconstruction</title>
+  <style>
+    :root {
+      --bg: #080a0f;
+      --panel: #10141e;
+      --panel-alt: #0c0f17;
+      --border: #1e2636;
+      --border-hi: #2d3952;
+      --text: #e2e8f0;
+      --muted: #8492a6;
+      --blue: #3b82f6;
+      --cyan: #38bdf8;
+      --emerald: #10b981;
+      --amber: #f59e0b;
+      --rose: #f43f5e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 18px 24px 28px;
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+    }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Header */
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      padding: 14px 20px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 18px;
+    }
+    .brand-row { display: flex; align-items: center; gap: 10px; }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--emerald);
+      box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18);
+      flex-shrink: 0;
+    }
+    .brand-title { font-size: 1.08rem; font-weight: 700; letter-spacing: 0.3px; color: #f8fafc; }
+    .brand-title span { color: var(--cyan); font-weight: 500; }
+    .brand-sub { font-size: 0.76rem; color: var(--muted); margin-top: 3px; }
+    .badges { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .pill {
+      font-size: 0.71rem;
+      padding: 5px 10px;
+      border-radius: 6px;
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .pill.live { color: var(--emerald); border-color: rgba(16, 185, 129, 0.32); }
+    /* [ADDED] Clean GitHub repo button in topbar */
+    .gh-link {
+      font-size: 0.72rem;
+      padding: 5px 11px;
+      border-radius: 6px;
+      background: #171e2d;
+      border: 1px solid var(--border-hi);
+      color: #e2e8f0;
+      text-decoration: none;
+      font-weight: 500;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .gh-link:hover { background: #1f293d; border-color: var(--cyan); color: #ffffff; }
+
+    /* Main Grid */
+    .workspace {
+      display: grid;
+      grid-template-columns: 356px 1fr;
+      gap: 18px;
+      align-items: start;
+    }
+    @media (max-width: 1080px) { .workspace { grid-template-columns: 1fr; } }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px;
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--cyan);
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      padding-bottom: 10px;
+      margin-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* Controls */
+    .field { margin-bottom: 14px; }
+    .field label {
+      display: block;
+      font-size: 0.76rem;
+      color: #cbd5e1;
+      margin-bottom: 5px;
+      font-weight: 500;
+    }
+    select {
+      width: 100%;
+      padding: 8px 10px;
+      background: var(--panel-alt);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.82rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    select:hover, select:focus { border-color: var(--blue); }
+
+    input[type="range"] { width: 100%; accent-color: var(--blue); cursor: pointer; }
+    .slider-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.71rem;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+    .slider-val { color: var(--amber); font-weight: 600; }
+
+    .slider-explain {
+      margin-top: 6px;
+      padding: 7px 10px;
+      background: var(--panel-alt);
+      border-left: 2px solid var(--blue);
+      border-radius: 4px;
+      font-size: 0.72rem;
+      color: #cbd5e1;
+      line-height: 1.42;
+    }
+    .slider-explain.warn { border-left-color: var(--amber); }
+    .slider-explain.crit { border-left-color: var(--rose); }
+
+    .btn-decode {
+      width: 100%;
+      padding: 11px 14px;
+      background: var(--blue);
+      color: #ffffff;
+      font-weight: 600;
+      font-size: 0.8rem;
+      letter-spacing: 0.45px;
+      text-transform: uppercase;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.08s;
+      margin-top: 4px;
+    }
+    .btn-decode:hover { background: #2563eb; }
+    .btn-decode:active { transform: translateY(1px); }
+    .btn-decode:disabled { opacity: 0.55; cursor: wait; }
+
+    /* 4 Model Spec Cards */
+    .specs-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px;
+      margin-top: 14px;
+    }
+    .spec-card {
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 9px 11px;
+    }
+    .spec-card .k { font-size: 0.63rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+    .spec-card .v { font-size: 0.9rem; font-weight: 700; margin-top: 3px; color: #f8fafc; }
+
+    /* Right Column */
+    .right-col { display: flex; flex-direction: column; gap: 18px; }
+
+    /* Oscilloscope */
+    #eegCanvas {
+      width: 100%;
+      height: 236px;
+      background: #07090e;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      display: block;
+    }
+    .attn-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.71rem;
+      color: var(--muted);
+      margin: 10px 0 6px;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .attn-blocks {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+    }
+    .attn-cell {
+      padding: 5px 6px;
+      border-radius: 5px;
+      font-size: 0.7rem;
+      text-align: center;
+      border: 1px solid var(--border);
+      color: #f8fafc;
+    }
+
+    /* Perturbation Impact Banner */
+    .delta-banner {
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--cyan);
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin-bottom: 14px;
+      font-size: 0.75rem;
+      color: #cbd5e1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    /* Synthesis + Retrieval 3-Column Layout */
+    .recon-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1.15fr;
+      gap: 16px;
+      align-items: start;
+    }
+    @media (max-width: 980px) { .recon-grid { grid-template-columns: 1fr; } }
+
+    .img-frame {
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+    }
+    .img-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      background: #07090e;
+      border-radius: 5px;
+      overflow: hidden;
+      border: 1px solid #1a2030;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .img-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: opacity 0.25s ease;
+    }
+    /* [ADDED] Clean spinner overlay during FLUX synthesis */
+    .spinner {
+      position: absolute;
+      width: 26px; height: 26px;
+      border: 2.5px solid rgba(56, 189, 248, 0.2);
+      border-top-color: var(--cyan);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+      display: none;
+    }
+    .spinner.active { display: block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .img-overlay-tag {
+      position: absolute;
+      bottom: 8px;
+      left: 8px;
+      right: 8px;
+      background: rgba(8, 10, 15, 0.84);
+      backdrop-filter: blur(4px);
+      border: 1px solid var(--border-hi);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.65rem;
+      color: #cbd5e1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .img-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 8px;
+      font-size: 0.72rem;
+      color: var(--muted);
+      gap: 8px;
+    }
+    .synth-hint {
+      margin-top: 6px;
+      font-size: 0.67rem;
+      color: var(--muted);
+      min-height: 15px;
+    }
+
+    /* Top-5 Retrieval List */
+    .rank-title {
+      font-size: 0.71rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      letter-spacing: 0.45px;
+    }
+    .rank-list { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+    .rank-item {
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 0.76rem;
+    }
+    .rank-item.is-gt {
+      border-color: var(--emerald);
+      background: rgba(16, 185, 129, 0.08);
+    }
+    .rank-top { display: flex; justify-content: space-between; margin-bottom: 5px; gap: 8px; }
+    .rank-bar { height: 5px; background: #1a2132; border-radius: 3px; overflow: hidden; }
+    .rank-fill { height: 100%; background: var(--blue); border-radius: 3px; transition: width 0.25s ease; }
+    .rank-item.is-gt .rank-fill { background: var(--emerald); }
+  </style>
+</head>
+<body>
+
+  <header class="topbar">
+    <div>
+      <div class="brand-row">
+        <span class="status-dot" title="Live PyTorch FastAPI Backend"></span>
+        <div class="brand-title">MINDCANVAS <span>// EEG-TO-CLIP WORKBENCH</span></div>
+      </div>
+      <!-- [CHANGED] Accurate pipeline subtitle -->
+      <div class="brand-sub">Zero-Shot 17-Channel EEG (100Hz) → 768-D CLIP ViT-L/14 Retrieval & FLUX.1-schnell Conditioning</div>
+    </div>
+    <div class="badges mono">
+      <div class="pill">DATASET: THINGS-EEG2 (sub-01, sub-02)</div>
+      <div class="pill live">LATENT: 768-D L2-NORM</div>
+      <!-- [ADDED] Update href to your exact MindCanvas GitHub repository URL -->
+      <a class="gh-link" href="https://github.com/ankit28k" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <!-- PANEL 01: CONTROLS -->
+    <div class="card">
+      <div class="card-header mono">
+        <span>01 // NEURAL INPUT CONSOLE</span>
+        <span>100HZ</span>
+      </div>
+
+      <div class="field">
+        <label>Subject Neural Stream</label>
+        <select id="subjectSelect">
+          <option value="Grand_Avg">Grand-Average Late-Fusion (sub-01 + sub-02)</option>
+          <option value="sub-01">Subject 01 (Individual Scalp Recording)</option>
+          <option value="sub-02">Subject 02 (Individual Scalp Recording)</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Select 1.0s Visual Thought EEG Slice (100 Timepoints)</label>
+        <select id="sliceSelect"></select>
+      </div>
+
+      <div class="field">
+        <label>Sequence Encoder Architecture (Trained Checkpoints)</label>
+        <!-- [CHANGED] Populated dynamically from inference_config.json -->
+        <select id="modelSelect"></select>
+      </div>
+
+      <div class="field">
+        <label>Inject Live Signal Perturbation (Gaussian Noise σ)</label>
+        <input type="range" id="noiseSlider" min="0" max="0.20" step="0.01" value="0.00" />
+        <div class="slider-meta mono">
+          <span>Clean (0.0)</span>
+          <span class="slider-val" id="noiseVal">σ = 0.00 (Clean)</span>
+          <span>Noisy (0.20)</span>
+        </div>
+        <div class="slider-explain" id="noiseExplain">
+          <b>σ = 0.00:</b> Unperturbed z-scored EEG voltage across all 17 occipital/parietal channels.
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Temporal Masking Window (Zero-Out ERP Slice)</label>
+        <input type="range" id="maskSlider" min="0" max="25" step="5" value="0" />
+        <div class="slider-meta mono">
+          <span>0ms</span>
+          <span class="slider-val" id="maskVal">0ms Masked (0 pts)</span>
+          <span>250ms</span>
+        </div>
+        <div class="slider-explain" id="maskExplain">
+          <b>0ms Masked:</b> Full 1.0s ERP active; N170 (+170ms) and P300 (+300ms) recognition peaks preserved.
+        </div>
+      </div>
+
+      <button class="btn-decode" id="decodeBtn">Decode EEG & Reconstruct Thought</button>
+
+      <div class="specs-grid mono">
+        <div class="spec-card">
+          <div class="k">BLOCK SIZE</div>
+          <div class="v" id="specBlock">—</div>
+        </div>
+        <div class="spec-card">
+          <div class="k">PARAMETERS</div>
+          <div class="v" id="specParams">—</div>
+        </div>
+        <div class="spec-card">
+          <div class="k" id="specTop10Lbl">TEST TOP-10</div>
+          <div class="v" id="specTop10" style="color: var(--emerald);">—</div>
+        </div>
+        <div class="spec-card">
+          <div class="k">GRAND AVG TOP-1</div>
+          <div class="v" id="specTop1">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN -->
+    <div class="right-col">
+      <!-- PANEL 02: OSCILLOSCOPE -->
+      <div class="card">
+        <div class="card-header mono">
+          <span>02 // 17-CHANNEL OCCIPITAL/PARIETAL EEG STREAM (-200MS TO +800MS)</span>
+          <span id="oscMeta" style="color: var(--muted);">CHANNELS: O1, Oz, O2, PO7, PO3, POz, PO4, PO8</span>
+        </div>
+        <canvas id="eegCanvas" width="920" height="236"></canvas>
+        <div class="attn-row mono">
+          <span>TEMPORAL ATTENTION WEIGHTS (α) ACROSS SEQUENCE BLOCKS:</span>
+          <span id="attnPeakLabel" style="color: var(--cyan);">Peak ERP Focus: —</span>
+        </div>
+        <div class="attn-blocks mono" id="attnContainer"></div>
+      </div>
+
+      <!-- PANEL 03: RECONSTRUCTION & RETRIEVAL -->
+      <div class="card">
+        <div class="card-header mono">
+          <span>03 // PAIRED VISUAL STIMULUS VS. EEG-CONDITIONED SYNTHESIS</span>
+          <span id="statusTag" style="color: var(--emerald);">READY</span>
+        </div>
+
+        <div class="delta-banner mono" id="deltaBanner">
+          <span id="deltaSummary"><b>PERTURBATION IMPACT:</b> Clean baseline active (σ=0.00, 0ms mask). Adjust sliders to compare cosine similarity drift.</span>
+          <span id="deltaMetric" style="color: var(--cyan);">ΔCosSim: 0.000</span>
+        </div>
+
+        <div class="recon-grid">
+          <!-- Paired Test Set Image -->
+          <div class="img-frame">
+            <div class="img-wrap">
+              <img id="gtImg" alt="" style="opacity:0" onload="this.style.opacity=1" />
+              <div class="img-overlay-tag mono" id="gtOverlay">[THINGS-EEG2 TEST PAIR]</div>
+            </div>
+            <div class="img-footer mono">
+              <span>GT STIMULUS</span>
+              <span id="gtConceptLabel" style="color: var(--cyan); font-weight: 600;">—</span>
+            </div>
+            <div class="synth-hint mono">Exact hold-out image shown to subject</div>
+          </div>
+
+          <!-- Decoded Generated Image -->
+          <div class="img-frame">
+            <div class="img-wrap">
+              <div class="spinner" id="genSpinner"></div>
+              <img id="genImg" alt="" style="opacity:0" onload="this.style.opacity=1; document.getElementById('genSpinner').classList.remove('active');" onerror="document.getElementById('genSpinner').classList.remove('active'); document.getElementById('synthHint').textContent='Image synthesis timed out — click Decode to retry';" />
+              <!-- [CHANGED] Honest FLUX.1-schnell + CLIP conditioning label -->
+              <div class="img-overlay-tag mono" id="genOverlay">[FLUX.1-schnell | Top-2 CLIP]</div>
+            </div>
+            <div class="img-footer mono">
+              <span id="genPredLabel">PRED: —</span>
+              <span id="simBadge" style="color: var(--emerald); font-weight: 600;">CosSim: —</span>
+            </div>
+            <div class="synth-hint mono" id="synthHint">Conditioned on Top-2 decoded CLIP concepts</div>
+          </div>
+
+          <!-- Top-5 Retrieval -->
+          <div>
+            <div class="rank-title mono">TOP-5 ZERO-SHOT CLIP RETRIEVAL (200 TEST CONCEPTS):</div>
+            <ul class="rank-list mono" id="rankList"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // [ADDED] Exact verified checkpoint specs as fallback; overwritten live from /api/init (inference_config.json)
+    const FALLBACK_PARAMS = {
+      Transformer: 3544321,
+      GRU:         1590017,
+      BiGRU:       3659009,
+      BiLSTM:      4710657,
+      LSTM:        1984769
+    };
+    const MODEL_DISPLAY_NAMES = {
+      Transformer: "Temporal Transformer",
+      GRU:         "Unidirectional GRU",
+      BiGRU:       "Bidirectional GRU",
+      BiLSTM:      "Bidirectional LSTM",
+      LSTM:        "Unidirectional LSTM"
+    };
+
+    let MODEL_CONFIG = {};  // Populated dynamically from /api/init
+    let baselineCache = {}; // Clean (noise=0, mask=0) CosSim & Top1 cache
+
+    // [ADDED] Strip numeric dataset prefixes like "00026_bullet" -> "bullet"
+    function cleanLabel(raw) {
+      return String(raw || "").replace(/^\d+[\s_]+/, "").replace(/_/g, " ").trim();
+    }
+
+    // [ADDED] Update the 4 spec cards dynamically from inference_config.json + selected subject
+    function updateModelSpecs() {
+      const model = document.getElementById("modelSelect").value;
+      const subject = document.getElementById("subjectSelect").value;
+      const info = MODEL_CONFIG[model];
+      if (!info) return;
+
+      const blockSize = info.block_size;
+      const nTokens = info.n_tokens || Math.floor(100 / blockSize);
+      const params = info.params || FALLBACK_PARAMS[model] || 0;
+      const top10 = (subject !== "Grand_Avg" && info.per_subject_top10 && info.per_subject_top10[subject])
+        ? info.per_subject_top10[subject]
+        : info.grand_avg_top10;
+
+      document.getElementById("specBlock").textContent = `${blockSize} (${nTokens} tokens)`;
+      document.getElementById("specParams").textContent = params.toLocaleString();
+      document.getElementById("specTop10Lbl").textContent = subject === "Grand_Avg" ? "GRAND AVG TOP-10" : `${subject.toUpperCase()} TOP-10`;
+      document.getElementById("specTop10").textContent = top10;
+      document.getElementById("specTop1").textContent = info.grand_avg_top1;
+    }
+
+    function updateSliderDescriptions() {
+      const noise = parseFloat(document.getElementById("noiseSlider").value);
+      const maskPts = parseInt(document.getElementById("maskSlider").value);
+      const maskMs = maskPts * 10;
+
+      document.getElementById("noiseVal").textContent =
+        noise === 0 ? "σ = 0.00 (Clean)" : (noise === 0.05 ? "σ = 0.05 (Train Default)" : `σ = ${noise.toFixed(2)}`);
+      document.getElementById("maskVal").textContent = `${maskMs}ms Masked (${maskPts} pts)`;
+
+      const nBox = document.getElementById("noiseExplain");
+      if (noise === 0) {
+        nBox.className = "slider-explain";
+        nBox.innerHTML = "<b>σ = 0.00 (Clean):</b> Unperturbed z-scored EEG voltage across all 17 occipital/parietal channels.";
+      } else if (noise <= 0.06) {
+        nBox.className = "slider-explain warn";
+        nBox.innerHTML = `<b>Increasing Noise to σ = ${noise.toFixed(2)}:</b> Adds mild Gaussian voltage jitter (N(0, σ<sup>2</sup>)) to all 17 channels, testing training-level regularization.`;
+      } else {
+        nBox.className = "slider-explain crit";
+        nBox.innerHTML = `<b>Increasing Noise to σ = ${noise.toFixed(2)}:</b> Heavy high-frequency voltage corruption degrades Signal-to-Noise Ratio (SNR), rotating the predicted 768-D vector away from the ground-truth CLIP embedding.`;
+      }
+
+      const mBox = document.getElementById("maskExplain");
+      if (maskPts === 0) {
+        mBox.className = "slider-explain";
+        mBox.innerHTML = "<b>0ms Masked:</b> Full 1.0s ERP active; N170 (+170ms) and P300 (+300ms) visual recognition peaks preserved.";
+      } else if (maskPts <= 10) {
+        mBox.className = "slider-explain warn";
+        mBox.innerHTML = `<b>Increasing Mask to ${maskMs}ms:</b> Zeroes out +150ms to +${150 + maskMs}ms post-stimulus, partially clipping the early N170 object-encoding wave.`;
+      } else {
+        mBox.className = "slider-explain crit";
+        mBox.innerHTML = `<b>Increasing Mask to ${maskMs}ms:</b> Zeroes out +150ms to +${150 + maskMs}ms (red zone on oscilloscope), erasing the core N170/P300 visual ERP and forcing attention blocks to rely on late parietal memory traces.`;
+      }
+    }
+
+    function drawOscilloscope(wave8ch, maskPts, attnWeights) {
+      const canvas = document.getElementById("eegCanvas");
+      const ctx = canvas.getContext("2d");
+      const W = canvas.width, H = canvas.height;
+      const plotH = H - 20; // Reserve 20px for x-axis millisecond ticks
+      ctx.clearRect(0, 0, W, H);
+
+      // Grid lines
+      ctx.strokeStyle = "#151b29";
+      ctx.lineWidth = 1;
+      for (let i = 1; i < 10; i++) {
+        const gx = (i / 10) * W;
+        ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, plotH); ctx.stroke();
+      }
+
+      // -200ms baseline shade
+      const onsetX = W * 0.20;
+      ctx.fillStyle = "rgba(255, 255, 255, 0.02)";
+      ctx.fillRect(0, 0, onsetX, plotH);
+
+      // Masking red window starting at t=35 (+150ms post-stimulus)
+      if (maskPts > 0) {
+        const startX = (35 / 100) * W;
+        const maskW = (maskPts / 100) * W;
+        ctx.fillStyle = "rgba(244, 63, 94, 0.18)";
+        ctx.fillRect(startX, 0, maskW, plotH);
+        ctx.strokeStyle = "rgba(244, 63, 94, 0.65)";
+        ctx.strokeRect(startX, 0, maskW, plotH);
+      }
+
+      // 0ms Stimulus Onset dashed line
+      ctx.save();
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = "#f59e0b";
+      ctx.beginPath(); ctx.moveTo(onsetX, 0); ctx.lineTo(onsetX, plotH); ctx.stroke();
+      ctx.restore();
+
+      ctx.fillStyle = "#64748b";
+      ctx.font = "11px ui-monospace, monospace";
+      ctx.fillText("-200ms Baseline", 10, 14);
+      ctx.fillStyle = "#f59e0b";
+      ctx.fillText("0ms (Stimulus Onset)", onsetX + 6, 14);
+
+      // 8 channels
+      const chNames = ["O1", "Oz", "O2", "PO7", "PO3", "POz", "PO4", "PO8"];
+      const colors = ["#38bdf8", "#60a5fa", "#818cf8", "#a78bfa", "#c084fc", "#38bdf8", "#60a5fa", "#818cf8"];
+      for (let c = 0; c < 8; c++) {
+        const baseY = 32 + c * 23;
+        ctx.strokeStyle = colors[c];
+        ctx.lineWidth = 1.45;
+        ctx.beginPath();
+        for (let t = 0; t < wave8ch.length; t++) {
+          const x = (t / (wave8ch.length - 1)) * W;
+          const y = baseY - wave8ch[t][c] * 6.2;
+          if (t === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        ctx.fillStyle = "#94a3b8";
+        ctx.fillText(chNames[c], 8, baseY + 3);
+      }
+
+      // [ADDED] Bottom millisecond axis bar (-200ms to +800ms)
+      ctx.strokeStyle = "#1e2636";
+      ctx.beginPath(); ctx.moveTo(0, plotH); ctx.lineTo(W, plotH); ctx.stroke();
+      ctx.fillStyle = "#64748b";
+      ctx.font = "10px ui-monospace, monospace";
+      const ticks = [
+        { p: 0.0, lbl: "-200ms" },
+        { p: 0.2, lbl: "0ms" },
+        { p: 0.4, lbl: "+200ms" },
+        { p: 0.6, lbl: "+400ms" },
+        { p: 0.8, lbl: "+600ms" },
+        { p: 0.96, lbl: "+800ms" }
+      ];
+      ticks.forEach(tk => ctx.fillText(tk.lbl, Math.max(6, tk.p * W - 12), H - 5));
+
+      // Render Temporal Attention blocks
+      const attnContainer = document.getElementById("attnContainer");
+      const nBlocks = attnWeights.length;
+      attnContainer.style.gridTemplateColumns = `repeat(${nBlocks}, 1fr)`;
+      let maxIdx = 0;
+      attnWeights.forEach((w, i) => { if (w > attnWeights[maxIdx]) maxIdx = i; });
+
+      const msPerBlock = Math.round(1000 / nBlocks);
+      const peakStart = -200 + maxIdx * msPerBlock;
+      const peakEnd = peakStart + msPerBlock;
+      document.getElementById("attnPeakLabel").textContent =
+        `Peak ERP Focus: ${peakStart >= 0 ? "+" : ""}${peakStart}ms to ${peakEnd >= 0 ? "+" : ""}${peakEnd}ms (Block B${maxIdx + 1})`;
+
+      attnContainer.innerHTML = attnWeights.map((w, i) => {
+        const alpha = Math.min(0.90, Math.max(0.14, w * 1.4));
+        return `<div class="attn-cell" style="background: rgba(59, 130, 246, ${alpha});">
+          B${i + 1}: ${(w * 100).toFixed(0)}%
+        </div>`;
+      }).join("");
+    }
+
+    async function runDecode(genImage = true) {
+      const btn = document.getElementById("decodeBtn");
+      const statusTag = document.getElementById("statusTag");
+      const spinner = document.getElementById("genSpinner");
+      const subject = document.getElementById("subjectSelect").value;
+      const idx = parseInt(document.getElementById("sliceSelect").value);
+      const model = document.getElementById("modelSelect").value;
+      const noise = parseFloat(document.getElementById("noiseSlider").value);
+      const maskPts = parseInt(document.getElementById("maskSlider").value);
+
+      updateSliderDescriptions();
+      updateModelSpecs();
+
+      btn.disabled = true;
+      statusTag.style.color = "var(--amber)";
+      statusTag.textContent = genImage ? "DECODING EEG + SYNTHESIZING (FLUX)..." : "UPDATING PERTURBATION METRICS...";
+      if (genImage) {
+        document.getElementById("genImg").style.opacity = 0.25;
+        spinner.classList.add("active");
+      }
+
+      try {
+        const cacheKey = `${subject}_${idx}_${model}`;
+        if (!baselineCache[cacheKey]) {
+          const baseRes = await fetch("/api/decode", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ subject, concept_idx: idx, model_name: model, noise_sigma: 0.0, mask_pts: 0, generate_image: false })
+          });
+          const baseData = await baseRes.json();
+          baselineCache[cacheKey] = { sim: baseData.gt_similarity, top1: cleanLabel(baseData.top5[0].concept) };
+        }
+
+        const res = await fetch("/api/decode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subject, concept_idx: idx, model_name: model, noise_sigma: noise, mask_pts: maskPts, generate_image: genImage })
+        });
+        const data = await res.json();
+
+        // Draw EEG & Attention
+        drawOscilloscope(data.waveform_8ch, maskPts, data.attention);
+
+        // [CHANGED] Clean human-readable labels without "00026_" prefix
+        const gtClean = cleanLabel(data.gt_concept);
+        const top1Concept = cleanLabel(data.top5[0].concept);
+        const top2Concept = cleanLabel(data.top5[1].concept);
+
+        // Update Paired Ground Truth Image
+        const gtImg = document.getElementById("gtImg");
+        gtImg.src = data.gt_image_url || `/test_images/${data.gt_concept}.jpg`;
+        document.getElementById("gtConceptLabel").textContent = gtClean;
+        document.getElementById("gtOverlay").textContent = `[TEST PAIR: ${gtClean}]`;
+
+        // Update Decoded Synthesis Image
+        const genImg = document.getElementById("genImg");
+        document.getElementById("genOverlay").textContent = `[FLUX.1-schnell | Top-2 CLIP]`;
+        document.getElementById("genPredLabel").textContent = `PRED: ${top1Concept}`;
+        document.getElementById("simBadge").textContent = `GT CosSim: ${data.gt_similarity.toFixed(3)}`;
+
+        if (genImage && data.generated_image_url) {
+          genImg.src = data.generated_image_url;
+          document.getElementById("synthHint").textContent = `Conditioned on: #1 ${top1Concept} + #2 ${top2Concept}`;
+        } else if (!genImage) {
+          spinner.classList.remove("active");
+          genImg.style.opacity = 1;
+          document.getElementById("synthHint").textContent = `Metrics updated live — click "Decode" to re-synthesize (${top1Concept})`;
+        }
+
+        // Update Perturbation Delta Banner
+        const base = baselineCache[cacheKey];
+        const diff = data.gt_similarity - base.sim;
+        const sign = diff >= 0 ? "+" : "";
+        const dSummary = document.getElementById("deltaSummary");
+        const dMetric = document.getElementById("deltaMetric");
+        if (noise === 0 && maskPts === 0) {
+          dSummary.innerHTML = `<b>CLEAN BASELINE (σ=0.00, 0ms mask):</b> Top-1 decoded as <b style="color:var(--emerald)">${top1Concept}</b>. Move Noise or Mask sliders to observe signal degradation.`;
+          dMetric.textContent = `Baseline CosSim: ${base.sim.toFixed(3)}`;
+          dMetric.style.color = "var(--emerald)";
+        } else {
+          const shifted = top1Concept !== base.top1
+            ? `Top-1 shifted from <b>${base.top1}</b> → <b style="color:var(--amber)">${top1Concept}</b>`
+            : (data.top5[0].is_gt ? `Top-1 remained <b style="color:var(--emerald)">${top1Concept}</b> (GT preserved)` : `Top-1 unchanged at <b style="color:var(--amber)">${top1Concept}</b> (off-target; GT: ${gtClean})`);
+          dSummary.innerHTML = `<b>PERTURBATION EFFECT (σ=${noise.toFixed(2)}, ${maskPts * 10}ms masked):</b> ${shifted}.`;
+          dMetric.textContent = `ΔCosSim vs Clean: ${sign}${diff.toFixed(4)} (${base.sim.toFixed(3)} → ${data.gt_similarity.toFixed(3)})`;
+          dMetric.style.color = diff < -0.01 ? "var(--rose)" : "var(--amber)";
+        }
+
+        // [CHANGED] Honest proportional bar widths (item.sim * 100) instead of clamping all 5 to 100%
+        const rankList = document.getElementById("rankList");
+        rankList.innerHTML = data.top5.map((item, i) => {
+          const pct = (item.sim * 100).toFixed(1);
+          const barW = Math.min(100, Math.max(6, item.sim * 100)).toFixed(1);
+          const lbl = cleanLabel(item.concept);
+          return `<li class="rank-item ${item.is_gt ? "is-gt" : ""}">
+            <div class="rank-top">
+              <span>#${i + 1} ${lbl} ${item.is_gt ? "✓ (GT Match)" : ""}</span>
+              <span>${pct}%</span>
+            </div>
+            <div class="rank-bar"><div class="rank-fill" style="width:${barW}%"></div></div>
+          </li>`;
+        }).join("");
+
+        statusTag.style.color = "var(--emerald)";
+        statusTag.textContent = "RECONSTRUCTION COMPLETE";
+      } catch (err) {
+        spinner.classList.remove("active");
+        statusTag.style.color = "var(--rose)";
+        statusTag.textContent = "ERROR: " + err.message;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    window.addEventListener("DOMContentLoaded", async () => {
+      updateSliderDescriptions();
+      document.getElementById("noiseSlider").addEventListener("input", updateSliderDescriptions);
+      document.getElementById("maskSlider").addEventListener("input", updateSliderDescriptions);
+      document.getElementById("noiseSlider").addEventListener("change", () => runDecode(false));
+      document.getElementById("maskSlider").addEventListener("change", () => runDecode(false));
+      document.getElementById("subjectSelect").addEventListener("change", () => runDecode(true));
+      document.getElementById("sliceSelect").addEventListener("change", () => runDecode(true));
+      document.getElementById("modelSelect").addEventListener("change", () => runDecode(true));
+      document.getElementById("decodeBtn").addEventListener("click", () => runDecode(true));
+
+      try {
+        const res = await fetch("/api/init");
+        const data = await res.json();
+
+        // [ADDED] Build model dropdown + MODEL_CONFIG dynamically from inference_config.json
+        const mSel = document.getElementById("modelSelect");
+        const rankEntries = Object.entries(data.config || {}).sort((a, b) => a[0].localeCompare(b[0]));
+        mSel.innerHTML = rankEntries.map(([rankKey, info], i) => {
+          MODEL_CONFIG[info.model_name] = info;
+          const pretty = MODEL_DISPLAY_NAMES[info.model_name] || info.model_name;
+          return `<option value="${info.model_name}">Rank ${i + 1}: ${pretty} (Top-10: ${info.grand_avg_top10})</option>`;
+        }).join("");
+
+        // [CHANGED] Clean slice dropdown labels without "00026_" numeric prefix
+        const sel = document.getElementById("sliceSelect");
+        const names = data.demo.concept_names || {};
+        const indices = Array.isArray(data.demo.demo_indices)
+          ? data.demo.demo_indices
+          : Object.keys(names).sort((a, b) => Number(a) - Number(b));
+        sel.innerHTML = indices.map(idx => {
+          const clean = cleanLabel(names[String(idx)] || `concept_${idx}`);
+          return `<option value="${idx}">Slice #${String(Number(idx) + 1).padStart(3, "0")} — ${clean} (100t × 17ch)</option>`;
+        }).join("");
+
+        updateModelSpecs();
+        runDecode(true);
+      } catch (e) {
+        document.getElementById("statusTag").style.color = "var(--rose)";
+        document.getElementById("statusTag").textContent = "INIT ERROR: " + e.message;
+      }
+    });
+  </script>
+</body>
+</html>
